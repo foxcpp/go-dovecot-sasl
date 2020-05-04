@@ -114,3 +114,10 @@ func (s *Server) handleAuth(c *conn) error {
 
 	return c.Writeln("OK", req.RequestID)
 }
+
+func (s *Server) Close() error {
+	for _, l := range s.l {
+		l.Close()
+	}
+	return nil
+}
