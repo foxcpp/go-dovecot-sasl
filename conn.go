@@ -10,7 +10,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"time"
 )
 
 type conn struct {
@@ -70,11 +69,37 @@ func (c *conn) ReadlnExpect(expectCmd string, atleastParams int) ([]string, erro
 	return params, nil
 }
 
-func (c *conn) handshakeServer(mechs map[string]Mechanism) (ConnInfo, error) {
+func (c *conn) handshakeServer(cuid string, mechs map[string]Mechanism) (ConnInfo, error) {
 	info := ConnInfo{
 		SPID:  strconv.Itoa(os.Getpid()),
-		CUID:  strconv.FormatInt(time.Now().UnixNano(), 10),
+		CUID:  cuid,
 		Mechs: mechs,
+	}
+
+	if err := c.Writeln("VERSION", "1", "1"); err != nil {
+		return info, err
+	}
+	if err := c.Writeln("SPID", info.SPID); err != nil {
+		return info, err
+	}
+	if err := c.Writeln("CUID", info.CUID); err != nil {
+		return info, err
+	}
+
+	cookie := make([]byte, 16)
+	if _, err := io.ReadFull(rand.Reader, cookie); err != nil {
+		return info, fmt.Errorf("dovecotsasl: failed to generate cookie: %w", err)
+	}
+	info.Cookie = hex.EncodeToString(cookie)
+
+	if err := c.Writeln("COOKIE", info.Cookie); err != nil {
+		return info, err
+	}
+
+	for name, mech := range info.Mechs {
+		if err := c.Writeln("MECH", mech.format(name)...); err != nil {
+			return info, err
+		}
 	}
 
 	version, err := c.ReadlnExpect("VERSION", 2)
@@ -90,33 +115,6 @@ func (c *conn) handshakeServer(mechs map[string]Mechanism) (ConnInfo, error) {
 		return info, err
 	}
 	info.CPID = cpid[0]
-
-	if err := c.Writeln("VERSION", "1", "1"); err != nil {
-		return info, err
-	}
-	if err := c.Writeln("SPID", info.SPID); err != nil {
-		return info, err
-	}
-	if err := c.Writeln("CUID", info.CUID); err != nil {
-		return info, err
-	}
-	if version[1] != "0" {
-		cookie := make([]byte, 16)
-		if _, err := io.ReadFull(rand.Reader, cookie); err != nil {
-			return info, fmt.Errorf("dovecotsasl: failed to generate cookie: %w", err)
-		}
-		info.Cookie = hex.EncodeToString(cookie)
-
-		if err := c.Writeln("COOKIE", info.Cookie); err != nil {
-			return info, err
-		}
-	}
-
-	for name, mech := range info.Mechs {
-		if err := c.Writeln("MECH", mech.format(name)...); err != nil {
-			return info, err
-		}
-	}
 
 	return info, c.Writeln("DONE")
 }

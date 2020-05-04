@@ -9,6 +9,8 @@ import (
 	"io/ioutil"
 	"log"
 	"net"
+	"strconv"
+	"sync/atomic"
 
 	"github.com/emersion/go-sasl"
 )
@@ -18,6 +20,8 @@ type Server struct {
 	mechInfo map[string]Mechanism
 	mechImpl map[string]func(*AuthReq) sasl.Server
 	Log      *log.Logger
+
+	connCount uint32
 }
 
 func NewServer() *Server {
@@ -53,7 +57,9 @@ func (s *Server) handleConn(netConn net.Conn) {
 	}
 	defer conn.Close()
 
-	_, err := conn.handshakeServer(s.mechInfo)
+	cuid := strconv.FormatUint(uint64(atomic.AddUint32(&s.connCount, 1)), 10)
+
+	_, err := conn.handshakeServer(cuid, s.mechInfo)
 	if err != nil {
 		s.Log.Println("I/O error:", err)
 		return
