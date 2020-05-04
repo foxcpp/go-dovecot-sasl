@@ -102,26 +102,6 @@ func (c *conn) handshakeClient() (ConnInfo, error) {
 		return info, fmt.Errorf("dovecotsasl: incompatible server version: %s.%s", version[0], version[1])
 	}
 
-	spid, err := c.ReadlnExpect("SPID", 1)
-	if err != nil {
-		return info, err
-	}
-	info.SPID = spid[0]
-
-	cuid, err := c.ReadlnExpect("CUID", 1)
-	if err != nil {
-		return info, err
-	}
-	info.CUID = cuid[0]
-
-	if version[1] != "0" {
-		cookie, err := c.ReadlnExpect("COOKIE", 1)
-		if err != nil {
-			return info, err
-		}
-		info.Cookie = cookie[0]
-	}
-
 	for {
 		cmd, params, err := c.Readln()
 		if err != nil {
@@ -130,14 +110,30 @@ func (c *conn) handshakeClient() (ConnInfo, error) {
 		if cmd == "DONE" {
 			break
 		}
-		if cmd != "MECH" {
-			return info, fmt.Errorf("dovecotsasl: unexpected command: %v", cmd)
+
+		switch cmd {
+		case "MECH":
+			name, mech, err := parseMech(params)
+			if err != nil {
+				return info, err
+			}
+			info.Mechs[name] = mech
+		case "SPID":
+			if len(params) == 0 {
+				return info, fmt.Errorf("dovecotsasl: missing parameter in SPID")
+			}
+			info.SPID = params[0]
+		case "CUID":
+			if len(params) == 0 {
+				return info, fmt.Errorf("dovecotsasl: missing parameter in CUID")
+			}
+			info.CUID = params[0]
+		case "COOKIE":
+			if len(params) == 0 {
+				return info, fmt.Errorf("dovecotsasl: missing parameter in COOKIE")
+			}
+			info.Cookie = params[0]
 		}
-		name, mech, err := parseMech(params)
-		if err != nil {
-			return info, err
-		}
-		info.Mechs[name] = mech
 	}
 
 	return info, nil
