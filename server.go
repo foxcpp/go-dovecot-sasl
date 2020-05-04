@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
@@ -93,8 +94,10 @@ func (s *Server) handleAuth(c *conn) error {
 
 	serv := handler(req)
 
+	resp := req.IR
+
 	for {
-		challenge, done, err := serv.Next(req.IR)
+		challenge, done, err := serv.Next(resp)
 		if err != nil {
 			err = c.Writeln("FAIL", AuthFail{
 				RequestID: req.RequestID,
@@ -109,6 +112,18 @@ func (s *Server) handleAuth(c *conn) error {
 		}
 		if err = c.Writeln("CONT", req.RequestID, base64.StdEncoding.EncodeToString(challenge)); err != nil {
 			return err
+		}
+
+		params, err := c.ReadlnExpect("CONT", 2)
+		if err != nil {
+			return err
+		}
+		if params[0] != req.RequestID {
+			return fmt.Errorf("dovecotsasl: unexpected request ID: %v", params[0])
+		}
+		resp, err = base64.StdEncoding.DecodeString(params[1])
+		if err != nil {
+			return fmt.Errorf("dovecotsasl: malformed challenge response: %v", err)
 		}
 	}
 
