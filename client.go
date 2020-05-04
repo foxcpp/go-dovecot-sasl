@@ -124,6 +124,10 @@ func (c *Client) Do(service string, cl sasl.Client, extraParams ...string) error
 	}
 }
 
+func (c *Client) ConnInfo() ConnInfo {
+	return c.info
+}
+
 func (cl *Client) Close() error {
 	return cl.c.Close()
 }
