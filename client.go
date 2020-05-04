@@ -101,7 +101,7 @@ func (c *Client) Do(service string, cl sasl.Client, extraParams ...string) error
 		}
 		switch cmd {
 		case "FAIL":
-			return parseFail(params[1:])
+			return parseFail(params)
 		case "CONT":
 			if len(params) < 2 {
 				return fmt.Errorf("dovecotsasl: missing challenge param")
