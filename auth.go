@@ -1,6 +1,7 @@
 package dovecotsasl
 
 import (
+	"encoding/base64"
 	"fmt"
 	"net"
 	"strconv"
@@ -111,6 +112,15 @@ func parseAuthReq(params []string) (*AuthReq, error) {
 	for _, p := range params[2:] {
 		parts := strings.SplitN(p, "=", 2)
 		switch parts[0] {
+		case "resp":
+			if len(parts) != 2 {
+				return nil, fmt.Errorf("dovecotsasl: missing value for resp")
+			}
+			resp, err := base64.StdEncoding.DecodeString(parts[1])
+			if err != nil {
+				return nil, fmt.Errorf("dovecotsasl: malformed initial response: %v", err)
+			}
+			req.IR = resp
 		case "service":
 			req.Service = parts[1]
 		case "secured":
