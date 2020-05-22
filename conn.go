@@ -18,8 +18,10 @@ func (c *conn) Writeln(cmd string, params ...string) error {
 	if _, err := c.W.WriteString(cmd); err != nil {
 		return err
 	}
-	if _, err := c.W.WriteRune('\t'); err != nil {
-		return err
+	if len(params) != 0 {
+		if _, err := c.W.WriteRune('\t'); err != nil {
+			return err
+		}
 	}
 	for i, p := range params {
 		if _, err := c.W.WriteString(p); err != nil {
