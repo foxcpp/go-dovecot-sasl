@@ -143,6 +143,13 @@ func (c *conn) handshakeClient() (ConnInfo, error) {
 		CPID:  strconv.Itoa(os.Getpid()),
 		Mechs: make(map[string]Mechanism),
 	}
+	
+	if err := c.Writeln("VERSION", "1", "1"); err != nil {
+		return info, err
+	}
+	if err := c.Writeln("CPID", info.CPID); err != nil {
+		return info, err
+	}
 
 	for {
 		cmd, params, err := c.Readln()
@@ -185,13 +192,6 @@ func (c *conn) handshakeClient() (ConnInfo, error) {
 			}
 			info.Cookie = params[0]
 		}
-	}
-
-	if err := c.Writeln("VERSION", "1", "1"); err != nil {
-		return info, err
-	}
-	if err := c.Writeln("CPID", info.CPID); err != nil {
-		return info, err
 	}
 
 	return info, nil
