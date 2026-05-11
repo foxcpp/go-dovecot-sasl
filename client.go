@@ -2,6 +2,7 @@ package dovecotsasl
 
 import (
 	"bufio"
+	"crypto/tls"
 	"encoding/base64"
 	"fmt"
 	"net"
@@ -34,38 +35,76 @@ func NewClient(netConn net.Conn) (*Client, error) {
 	return &c, nil
 }
 
-// LocalIP formats local server IP for use in Client.Do params.
-func LocalIP(ip net.IP) string {
-	return "lip=" + ip.String()
+type Parameter string
+
+// ParamLocalIP formats local server IP for use in Client.Do params.
+func ParamLocalIP(ip net.IP) Parameter {
+	return "lip=" + Parameter(ip.String())
 }
 
-// LocalIP formats local port for use in Client.Do params.
-func LocalPort(i uint16) string {
-	return "lport=" + strconv.Itoa(int(i))
+// ParamLocalPort formats local port for use in Client.Do params.
+func ParamLocalPort(i uint16) Parameter {
+	return "lport=" + Parameter(strconv.Itoa(int(i)))
 }
 
-// LocalIP formats remote IP for use in Client.Do params.
-func RemoteIP(ip net.IP) string {
-	return "rip=" + ip.String()
+// ParamRemoteIP formats remote IP for use in Client.Do params.
+func ParamRemoteIP(ip net.IP) Parameter {
+	return "rip=" + Parameter(ip.String())
 }
 
-// LocalIP formats remote port for use in Client.Do params.
-func RemotePort(i uint16) string {
-	return "rport=" + strconv.Itoa(int(i))
+// ParamRemotePort formats remote port for use in Client.Do params.
+func ParamRemotePort(i uint16) Parameter {
+	return "rport=" + Parameter(strconv.Itoa(int(i)))
+}
+
+func ParamSecured(meth SecuredMethod) Parameter {
+	if meth == SecuredNone {
+		return "secured"
+	}
+	return "secured=" + Parameter(meth)
+}
+
+func ParamTransport(value TransportValue) Parameter {
+	return "transport=" + Parameter(value)
+}
+
+func ParamTLSCipher(value string) Parameter {
+	return "tls_cipher=" + Parameter(value)
+}
+
+func ParamTLSCipherBits(bits int) Parameter {
+	return "tls_cipher_bits=" + Parameter(strconv.Itoa(bits))
+}
+
+func ParamTLSPFS(value string) Parameter {
+	return "tls_pfs=" + Parameter(value)
+}
+
+func ParamTLSProtocol(version uint16) Parameter {
+	switch version {
+	case tls.VersionTLS10:
+		return "tls_version=TLSv1.0"
+	case tls.VersionTLS11:
+		return "tls_protocol=TLSv1.1"
+	case tls.VersionTLS12:
+		return "tls_protocol=TLSv1.2"
+	case tls.VersionTLS13:
+		return "tls_protocol=TLSv1.3"
+	default:
+		return "tls_protocol=TLS"
+	}
 }
 
 // Constants for Client.Do params.
 // See https://wiki.dovecot.org/Design/AuthProtocol for description.
 const (
-	Secured         = "secured"
-	CertUsername    = "cert_username"
-	ValidClientCert = "valid-client-cert"
-	NoPenalty       = "no-penalty"
+	ParamValidClientCert Parameter = "valid-client-cert"
+	ParamNoPenalty       Parameter = "no-penalty"
 )
 
 // Do performs SASL authentication using Dovecot SASL server and provided
 // sasl.Client implementation.
-func (c *Client) Do(service string, cl sasl.Client, extraParams ...string) error {
+func (c *Client) Do(service string, cl sasl.Client, extraParams ...Parameter) error {
 	mech, ir, err := cl.Start()
 	if err != nil {
 		return err
@@ -79,7 +118,9 @@ func (c *Client) Do(service string, cl sasl.Client, extraParams ...string) error
 
 	params := make([]string, 0, 8)
 	params = append(params, rid, mech, "service="+service)
-	params = append(params, extraParams...)
+	for _, p := range extraParams {
+		params = append(params, string(p))
+	}
 	if ir != nil {
 		params = append(params, "resp="+base64.StdEncoding.EncodeToString(ir))
 	}

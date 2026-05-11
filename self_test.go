@@ -63,12 +63,12 @@ func TestSaslPlain(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = cl.Do("smtp", sasl.NewPlainClient("", "foxcpp", "1234"), Secured)
+	err = cl.Do("smtp", sasl.NewPlainClient("", "foxcpp", "1234"), ParamSecured(SecuredTLS))
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	err = cl.Do("smtp", sasl.NewPlainClient("", "foxcpp", "5678"), Secured)
+	err = cl.Do("smtp", sasl.NewPlainClient("", "foxcpp", "5678"), ParamSecured(SecuredTLS))
 	if err == nil {
 		t.Fatal("Expected an error")
 	}

@@ -80,6 +80,23 @@ func (af AuthFail) format() []string {
 	return params
 }
 
+type SecuredMethod string
+
+var (
+	SecuredNone      SecuredMethod = ""
+	SecuredLocalhost SecuredMethod = "localhost"
+	SecuredSSL       SecuredMethod = "ssl"
+	SecuredTLS       SecuredMethod = "tls"
+)
+
+type TransportValue string
+
+var (
+	TransportInsecure TransportValue = "insecure"
+	TransportTrusted  TransportValue = "trusted"
+	TransportTLS      TransportValue = "tls"
+)
+
 type AuthReq struct {
 	RequestID string
 	Mechanism string
@@ -91,10 +108,19 @@ type AuthReq struct {
 	RemoteIP   net.IP
 	RemotePort uint16
 
-	Secured         bool
+	Secured       bool
+	SecuredMethod SecuredMethod
+
+	Transport     string
+	TLSCipher     string
+	TLSCipherBits int
+	TLSPFS        string
+	TLSProtocol   string
+
 	ValidClientCert bool
 	NoPenalty       bool
-	CertUsername    bool
+	CertUsername    string
+	ClientID        string // IMAP ID
 
 	IR []byte
 }
@@ -109,12 +135,15 @@ func parseAuthReq(params []string) (*AuthReq, error) {
 		Mechanism: params[1],
 	}
 
-	for _, p := range params[2:] {
+	for i, p := range params[2:] {
 		parts := strings.SplitN(p, "=", 2)
 		switch parts[0] {
 		case "resp":
 			if len(parts) != 2 {
 				return nil, fmt.Errorf("dovecotsasl: missing value for resp")
+			}
+			if i != len(params[2:])-1 {
+				return nil, fmt.Errorf("dovecotsasl: resp should be the last parameter")
 			}
 			resp, err := base64.StdEncoding.DecodeString(parts[1])
 			if err != nil {
@@ -125,12 +154,52 @@ func parseAuthReq(params []string) (*AuthReq, error) {
 			req.Service = parts[1]
 		case "secured":
 			req.Secured = true
+			if len(parts) == 2 {
+				req.SecuredMethod = SecuredMethod(parts[1])
+			}
+		case "transport":
+			if len(parts) != 2 {
+				return nil, fmt.Errorf("dovecotsasl: missing transport argument")
+			}
+			req.Transport = parts[1]
+		case "tls_cipher":
+			if len(parts) != 2 {
+				return nil, fmt.Errorf("dovecotsasl: missing tls_cipher argument")
+			}
+			req.TLSCipher = parts[1]
+		case "tls_cipher_bits":
+			if len(parts) != 2 {
+				return nil, fmt.Errorf("dovecotsasl: missing tls_cipher_bits argument")
+			}
+			bits, err := strconv.Atoi(parts[1])
+			if err != nil {
+				return nil, fmt.Errorf("dovecotsasl: malformed tls_cipher parameter: %v", err)
+			}
+			req.TLSCipherBits = bits
+		case "tls_pfs":
+			if len(parts) != 2 {
+				return nil, fmt.Errorf("dovecotsasl: missing tls_pfs argument")
+			}
+			req.TLSPFS = parts[1]
+		case "tls_protocol":
+			if len(parts) != 2 {
+				return nil, fmt.Errorf("dovecotsasl: missing tls_protocol argument")
+			}
+			req.TLSProtocol = parts[1]
 		case "valid-client-cert":
 			req.ValidClientCert = true
 		case "no-penalty":
 			req.NoPenalty = true
 		case "cert_username":
-			req.CertUsername = true
+			if len(parts) != 2 {
+				return nil, fmt.Errorf("dovecotsasl: missing cert_username argument")
+			}
+			req.CertUsername = parts[1]
+		case "client_id":
+			if len(parts) != 2 {
+				return nil, fmt.Errorf("dovecotsasl: missing client_id argument")
+			}
+			req.ClientID = parts[1]
 		case "lip":
 			if len(parts) != 2 {
 				return nil, fmt.Errorf("dovecotsasl: missing value for lip")

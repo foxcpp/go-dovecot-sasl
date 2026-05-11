@@ -12,7 +12,7 @@ import (
 type Mechanism struct {
 	Anonymous      bool
 	Plaintext      bool
-	Dictonary      bool
+	Dictionary     bool
 	Active         bool
 	ForwardSecrecy bool
 	MutualAuth     bool
@@ -31,8 +31,8 @@ func parseMech(params []string) (string, Mechanism, error) {
 			mech.Anonymous = true
 		case "plaintext":
 			mech.Plaintext = true
-		case "dictonary":
-			mech.Dictonary = true
+		case "dictionary":
+			mech.Dictionary = true
 		case "active":
 			mech.Active = true
 		case "forward-secrecy":
@@ -57,8 +57,8 @@ func (mech Mechanism) format(name string) []string {
 	if mech.Plaintext {
 		params = append(params, "plaintext")
 	}
-	if mech.Dictonary {
-		params = append(params, "dictonary")
+	if mech.Dictionary {
+		params = append(params, "dictionary")
 	}
 	if mech.Active {
 		params = append(params, "active")
@@ -143,7 +143,7 @@ func (c *conn) handshakeClient() (ConnInfo, error) {
 		CPID:  strconv.Itoa(os.Getpid()),
 		Mechs: make(map[string]Mechanism),
 	}
-	
+
 	if err := c.Writeln("VERSION", "1", "1"); err != nil {
 		return info, err
 	}
