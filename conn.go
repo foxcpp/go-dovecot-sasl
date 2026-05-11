@@ -24,7 +24,7 @@ func (c *conn) Writeln(cmd string, params ...string) error {
 		}
 	}
 	for i, p := range params {
-		if _, err := c.W.WriteString(p); err != nil {
+		if _, err := c.W.WriteString(tabEscape(p)); err != nil {
 			return err
 		}
 		if i != len(params)-1 {
@@ -40,6 +40,48 @@ func (c *conn) Writeln(cmd string, params ...string) error {
 	return c.W.Flush()
 }
 
+func tabEscape(s string) string {
+	var builder strings.Builder
+	for _, b := range []byte(s) {
+		switch b {
+		case '\t', '\n', '\r', escapeChar:
+			builder.WriteByte(escapeChar)
+		}
+		builder.WriteByte(b)
+	}
+	return builder.String()
+}
+
+const escapeChar = '\001'
+
+func tabUnescape(s string) []string {
+	var parts []string
+	var partBuilder strings.Builder
+	var escaped bool
+	for _, b := range []byte(s) {
+		if escaped {
+			partBuilder.WriteByte(byte(b))
+			escaped = false
+			continue
+		}
+
+		if b == escapeChar {
+			escaped = true
+			continue
+		}
+		if b == '\t' {
+			parts = append(parts, partBuilder.String())
+			partBuilder.Reset()
+			continue
+		}
+		partBuilder.WriteByte(byte(b))
+	}
+	if partBuilder.Len() > 0 {
+		parts = append(parts, partBuilder.String())
+	}
+	return parts
+}
+
 func (c *conn) Readln() (string, []string, error) {
 	if !c.R.Scan() {
 		if err := c.R.Err(); err != nil {
@@ -48,7 +90,7 @@ func (c *conn) Readln() (string, []string, error) {
 		return "", nil, io.EOF
 	}
 
-	parts := strings.Split(c.R.Text(), "\t")
+	parts := tabUnescape(c.R.Text())
 	return parts[0], parts[1:], nil
 }
 
