@@ -41,16 +41,15 @@ func TestSaslPlain(t *testing.T) {
 	dir := testDir(t)
 	defer os.RemoveAll(dir)
 
-	authenticator := func(_, user, pass string) error {
-		if user == "foxcpp" && pass == "1234" {
-			return nil
-		}
-		return errors.New("nope")
-	}
-
 	s := NewServer()
-	s.AddMechanism("PLAIN", Mechanism{Plaintext: true}, func(req *AuthReq) sasl.Server {
-		return sasl.NewPlainServer(authenticator)
+	s.AddMechanism("PLAIN", Mechanism{Plaintext: true}, func(req *AuthReq, cb FuncSASLCallback) sasl.Server {
+		return sasl.NewPlainServer(func(_, user, pass string) error {
+			if user == "foxcpp" && pass == "1234" {
+				cb("foxcpp", nil)
+				return nil
+			}
+			return errors.New("nope")
+		})
 	})
 	defer s.Close()
 
@@ -63,16 +62,21 @@ func TestSaslPlain(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err = cl.Do("smtp", sasl.NewPlainClient("", "foxcpp", "1234"), ParamSecured(SecuredTLS))
+	res, err := cl.Do("smtp", sasl.NewPlainClient("", "foxcpp", "1234"), ParamSecured(SecuredTLS))
 	if err != nil {
 		t.Fatal(err)
 	}
+	if res.UserID != "foxcpp" {
+		t.Errorf("got UserID = %q, want %q", res.UserID, "foxcpp")
+	}
 
-	err = cl.Do("smtp", sasl.NewPlainClient("", "foxcpp", "5678"), ParamSecured(SecuredTLS))
+	res, err = cl.Do("smtp", sasl.NewPlainClient("", "foxcpp", "5678"), ParamSecured(SecuredTLS))
 	if err == nil {
 		t.Fatal("Expected an error")
 	}
-	_, ok := err.(AuthFail)
+
+	var authFail AuthFail
+	ok := errors.As(err, &authFail)
 	if !ok {
 		t.Fatal("Error is not an auth fail:", err)
 	}

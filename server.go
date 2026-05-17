@@ -15,10 +15,14 @@ import (
 	"github.com/emersion/go-sasl"
 )
 
+type FuncSASLCallback func(userID string, extra map[string]string)
+
+type FuncSASLHandler func(*AuthReq, FuncSASLCallback) sasl.Server
+
 type Server struct {
 	l        []net.Listener
 	mechInfo map[string]Mechanism
-	mechImpl map[string]func(*AuthReq) sasl.Server
+	mechImpl map[string]FuncSASLHandler
 	Log      *log.Logger
 
 	connCount uint32
@@ -27,12 +31,12 @@ type Server struct {
 func NewServer() *Server {
 	return &Server{
 		mechInfo: map[string]Mechanism{},
-		mechImpl: map[string]func(*AuthReq) sasl.Server{},
+		mechImpl: map[string]FuncSASLHandler{},
 		Log:      log.New(ioutil.Discard, "", 0),
 	}
 }
 
-func (s *Server) AddMechanism(name string, info Mechanism, handler func(*AuthReq) sasl.Server) {
+func (s *Server) AddMechanism(name string, info Mechanism, handler FuncSASLHandler) {
 	s.mechInfo[name] = info
 	s.mechImpl[name] = handler
 }
@@ -98,7 +102,15 @@ func (s *Server) handleAuth(c *conn) error {
 		}
 	}
 
-	serv := handler(req)
+	okResp := &AuthOK{
+		RequestID: req.RequestID,
+	}
+	callback := func(userID string, extra map[string]string) {
+		okResp.UserID = userID
+		okResp.Extra = extra
+	}
+
+	serv := handler(req, callback)
 
 	resp := req.IR
 
@@ -133,7 +145,7 @@ func (s *Server) handleAuth(c *conn) error {
 		}
 	}
 
-	return c.Writeln("OK", req.RequestID)
+	return c.Writeln("OK", okResp.format()...)
 }
 
 func (s *Server) Close() error {

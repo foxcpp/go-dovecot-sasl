@@ -80,6 +80,48 @@ func (af AuthFail) format() []string {
 	return params
 }
 
+type AuthOK struct {
+	RequestID string
+	UserID    string
+	Extra     map[string]string
+}
+
+func parseOk(params []string) AuthOK {
+	if len(params) == 0 {
+		return AuthOK{}
+	}
+
+	ao := AuthOK{
+		RequestID: params[0],
+		Extra:     make(map[string]string),
+	}
+	for _, p := range params[1:] {
+		parts := strings.SplitN(p, "=", 2)
+		switch parts[0] {
+		case "userid":
+			ao.UserID = parts[1]
+		default:
+			ao.Extra[parts[0]] = parts[1]
+		}
+	}
+	return ao
+}
+
+func (ao AuthOK) format() []string {
+	params := make([]string, 0, 3)
+	params = append(params, ao.RequestID)
+	if ao.UserID != "" && !strings.ContainsAny(ao.UserID, "=\t\n") {
+		params = append(params, "userid="+ao.UserID)
+	}
+	for k, v := range ao.Extra {
+		if !strings.ContainsAny(k, "=\t\n") || !strings.ContainsAny(v, "=\t\n") {
+			continue
+		}
+		params = append(params, k+"="+v)
+	}
+	return params
+}
+
 type SecuredMethod string
 
 var (

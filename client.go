@@ -102,15 +102,15 @@ const (
 	ParamNoPenalty       Parameter = "no-penalty"
 )
 
-// Do performs SASL authentication using Dovecot SASL server and provided
+// Do preforms SASL authentication using Dovecot SASL server and provided
 // sasl.Client implementation.
-func (c *Client) Do(service string, cl sasl.Client, extraParams ...Parameter) error {
+func (c *Client) Do(service string, cl sasl.Client, extraParams ...Parameter) (*AuthOK, error) {
 	mech, ir, err := cl.Start()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if _, ok := c.info.Mechs[mech]; !ok {
-		return fmt.Errorf("dovecotsasl: unsupported mechanism: %v", mech)
+		return nil, fmt.Errorf("dovecotsasl: unsupported mechanism: %v", mech)
 	}
 
 	c.rid++
@@ -126,41 +126,42 @@ func (c *Client) Do(service string, cl sasl.Client, extraParams ...Parameter) er
 	}
 
 	if err := c.c.Writeln("AUTH", params...); err != nil {
-		return err
+		return nil, err
 	}
 
 	for {
 		cmd, params, err := c.c.Readln()
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if len(params) == 0 {
-			return fmt.Errorf("dovecotsasl: missing reply params")
+			return nil, fmt.Errorf("dovecotsasl: missing reply params")
 		}
 		if params[0] != rid {
-			return fmt.Errorf("dovecotsasl: request ID mismatch, sent %s, received %s", rid, params[0])
+			return nil, fmt.Errorf("dovecotsasl: request ID mismatch, sent %s, received %s", rid, params[0])
 		}
 		switch cmd {
 		case "FAIL":
-			return parseFail(params)
+			return nil, parseFail(params)
 		case "CONT":
 			if len(params) < 2 {
-				return fmt.Errorf("dovecotsasl: missing challenge param")
+				return nil, fmt.Errorf("dovecotsasl: missing challenge param")
 			}
 			challenge, err := base64.StdEncoding.DecodeString(params[1])
 			if err != nil {
-				return fmt.Errorf("dovecotsasl: malformed challenge: %v", err)
+				return nil, fmt.Errorf("dovecotsasl: malformed challenge: %v", err)
 			}
 			response, err := cl.Next(challenge)
 			if err != nil {
-				return err
+				return nil, err
 			}
 			err = c.c.Writeln("CONT", rid, base64.StdEncoding.EncodeToString(response))
 			if err != nil {
-				return err
+				return nil, err
 			}
 		case "OK":
-			return nil
+			ao := parseOk(params)
+			return &ao, nil
 		}
 	}
 }
@@ -169,6 +170,6 @@ func (c *Client) ConnInfo() ConnInfo {
 	return c.info
 }
 
-func (cl *Client) Close() error {
-	return cl.c.Close()
+func (c *Client) Close() error {
+	return c.c.Close()
 }
